@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Fee History - AJ Fitness</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(to bottom, #FF9933 0%, #ffffff 50%, #138808 100%);
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 800px;
+            margin: auto;
+            background: rgba(0, 0, 0, 0.75);
+            padding: 30px;
+            margin-top: 50px;
+            border-radius: 10px;
+            color: white;
+        }
+        h2 {
+            text-align: center;
+            color: #FFD700;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 25px;
+            background: white;
+            color: black;
+        }
+        th, td {
+            padding: 12px;
+            border: 1px solid #666;
+            text-align: center;
+        }
+        th {
+            background-color: #004080;
+            color: white;
+        }
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+        tr:hover {
+            background-color: #ddd;
+        }
+        .back-link {
+            text-align: center;
+            margin-top: 20px;
+        }
+        .back-link a {
+            color: #FFD700;
+            text-decoration: none;
+        }
+        .print-btn {
+            padding: 6px 10px;
+            background: #FF9933;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            text-decoration: none;
+        }
+        .print-btn:hover {
+            background: #e67e22;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Fee History - {{ member.name }}</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Amount (₹)</th>
+                    <th>Date</th>
+                    <th>Receipt</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for fee in history %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ fee.amount }}</td>
+                    <td>{{ fee.date }}</td>
+                    <td><a class="print-btn" href="/print-receipt/{{ fee.id }}" target="_blank">🖨️ Print</a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="back-link">
+            <a href="/dashboard">← Back to Dashboard</a>
+        </div>
+    </div>
+</body>
+</html>

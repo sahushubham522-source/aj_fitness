@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Record Fee - AJ Fitness</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: linear-gradient(to right, #ffecd2, #fcb69f); /* soft multicolor */
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 500px;
+            margin: auto;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.15);
+        }
+        h2 {
+            text-align: center;
+            color: #6a1b9a; /* purple */
+        }
+        label {
+            display: block;
+            margin: 15px 0 5px;
+            color: #333;
+        }
+        input[type="number"],
+        input[type="date"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+        }
+        button {
+            margin-top: 20px;
+            width: 100%;
+            padding: 10px;
+            background: #2196f3; /* blue */
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .back-link {
+            text-align: center;
+            margin-top: 15px;
+        }
+        .back-link a {
+            text-decoration: none;
+            color: #2196f3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Record New Fee</h2>
+        <p><strong>Member:</strong> {{ member.name }}</p>
+        <form method="post">
+            <label for="amount">Amount (₹):</label>
+            <input type="number" name="amount" required>
+
+            <label for="date">Date of Payment:</label>
+            <input type="date" name="date" value="{{ current_date }}" required>
+
+            <button type="submit">Submit Fee</button>
+        </form>
+        <div class="back-link">
+            <a href="/dashboard">← Back to Dashboard</a>
+        </div>
+    </div>
+</body>
+</html>

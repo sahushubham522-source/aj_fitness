@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Add New Member - AJ Fitness</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #ffa500; /* orange */
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.2);
+        }
+        h2 {
+            text-align: center;
+            color: #b22222;
+        }
+        label {
+            display: block;
+            margin: 12px 0 5px;
+        }
+        input[type="text"],
+        input[type="date"],
+        input[type="number"],
+        input[type="file"] {
+            width: 100%;
+            padding: 8px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+        button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            background: #b22222;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            width: 100%;
+        }
+        .back-btn {
+            margin-top: 15px;
+            text-align: center;
+        }
+        .back-btn a {
+            color: #b22222;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Add New Member</h2>
+        <form method="post" enctype="multipart/form-data">
+            <label for="name">Full Name:</label>
+            <input type="text" name="name" required>
+
+            <label for="phone">Phone Number:</label>
+            <input type="text" name="phone" required>
+
+            <label for="photo">Upload Photo:</label>
+            <input type="file" name="photo" accept="image/*">
+
+            <label for="start_date">Start Date:</label>
+            <input type="date" name="start_date" required value="{{ today }}">
+
+            <label for="end_date">End Date:</label>
+            <input type="date" name="end_date" required>
+
+            <hr>
+            <h3>Initial Fee Submission</h3>
+
+            <label for="fee_amount">Fee Amount:</label>
+            <input type="number" name="fee_amount" required>
+
+            <label for="fee_date">Fee Date:</label>
+            <input type="date" name="fee_date" required value="{{ today }}">
+
+            <button type="submit">Add Member + Record Fee</button>
+        </form>
+        <div class="back-btn">
+            <a href="/dashboard">← Back to Dashboard</a>
+        </div>
+    </div>
+</body>
+</html>

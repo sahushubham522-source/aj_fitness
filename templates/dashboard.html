@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard - AJ Fitness</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #e6f0ff; /* light blue background */
+            margin: 0;
+            padding: 20px;
+        }
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        h2 {
+            color: #003366; /* dark blue */
+        }
+        .stats {
+            margin: 20px 0;
+            padding: 10px;
+            background: #d0e3ff;
+            border: 1px solid #a3c4ff;
+            border-radius: 5px;
+        }
+        .search-box {
+            margin-bottom: 20px;
+        }
+        input[type="text"] {
+            padding: 7px;
+            width: 250px;
+            margin-right: 10px;
+        }
+        button {
+            padding: 7px 15px;
+            background: #004080;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .member-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        .card {
+            background: white;
+            border: 1px solid #ccc;
+            padding: 15px;
+            border-radius: 10px;
+        }
+        .card img {
+            max-width: 100%;
+            max-height: 120px;
+            display: block;
+            margin-bottom: 10px;
+        }
+        .warning {
+            color: #ff9900;
+            font-weight: bold;
+        }
+        .overdue {
+            color: red;
+            font-weight: bold;
+        }
+        .top-right {
+            text-align: right;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h2>🏋️ AJ Fitness Dashboard</h2>
+        <div class="top-right">
+            <a href="/add-member"><button>Add New Member</button></a>
+            <a href="/backup"><button>Backup</button></a>
+            <a href="/export/members"><button>Export Members</button></a>
+            <a href="/export/fees"><button>Export Fees</button></a>
+            <a href="/logout"><button>Logout</button></a>
+        </div>
+    </header>
+<div style="background-color:#fff3cd; padding:10px; border:1px solid #ffa500; border-radius:5px; margin-top:20px;">
+  <h3 style="color:#ff6600;">⏰ Expiry Alerts (-3 to +2 Days)</h3>
+  {% if expiry_alerts %}
+    <ul>
+      {% for member in expiry_alerts %}
+        <li><strong>{{ member.name }}</strong> | Expiry Date: <strong>{{ member.end_date }}</strong></li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>No members expiring in this window.</p>
+  {% endif %}
+</div>
+
+
+    <div class="stats">
+        📅 New Joins Today: {{ new_joins }} |
+        💸 New Payments Today: {{ new_payments }} |
+        ⏰ Expiring Soon: {{ expiring_soon }}
+    </div>
+
+    <div class="search-box">
+        <form method="get" action="/dashboard">
+            <input type="text" name="search" placeholder="Search by name">
+            <button type="submit">Search</button>
+        </form>
+    </div>
+
+    <div class="member-list">
+        {% for member in members %}
+        <div class="card">
+            {% if member.photo %}
+                <img src="{{ url_for('static', filename='images/' + member.photo) }}" alt="Member Photo">
+            {% endif %}
+            <h3>{{ member.name }}</h3>
+            <p>📞 {{ member.phone }}</p>
+            <p>🏁 Ends on: {{ member.end_date }}</p>
+            {% if member.expiring %}
+                <p class="warning">⚠️ Expiring Soon</p>
+            {% endif %}
+            {% if member.overdue %}
+                <p class="overdue">❌ Fee Overdue</p>
+            {% endif %}
+            <a href="/fee-history/{{ member.id }}"><button>View Fee History</button></a>
+            <a href="/record-fee/{{ member.id }}"><button>Record New Fee</button></a>
+            <form action="{{ url_for('delete_member', member_id=member.id) }}" method="POST" style="display:inline;">
+  <button type="submit" onclick="return confirm('Are you sure you want to delete {{ member.name }}?')" style="color:white; background:red; border:none; padding:5px 10px; border-radius:4px;">Delete</button>
+</form>
+
+        </div>
+        {% endfor %}
+    </div>
+</body>
+</html>
