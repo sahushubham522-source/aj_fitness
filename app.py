@@ -137,7 +137,7 @@ def add_member():
         cur = conn.cursor()
         cur.execute("""
             INSERT INTO members (name, phone, photo, start_date, end_date, join_date, expiry_date) 
-            VALUES (%s, %s, %s, %s, %s) RETURNING id
+            VALUES ((%s, %s, %s, %s, %s, %s, %s) RETURNING id
         """, (name, phone, filename, start_date, end_date, join_date, expiry_date))
         member_id = cur.fetchone()[0]
 
