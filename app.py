@@ -136,9 +136,9 @@ def add_member():
         conn = get_db_connection()
         cur = conn.cursor()
         cur.execute("""
-            INSERT INTO members (name, phone, photo, start_date, end_date) 
+            INSERT INTO members (name, phone, photo, start_date, end_date, join_date, expiry_date) 
             VALUES (%s, %s, %s, %s, %s) RETURNING id
-        """, (name, phone, filename, start_date, end_date))
+        """, (name, phone, filename, start_date, end_date, join_date, expiry_date))
         member_id = cur.fetchone()[0]
 
         cur.execute("INSERT INTO fees (member_id, amount, date) VALUES (%s, %s, %s)",
