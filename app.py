@@ -1,4 +1,4 @@
-# AJ Fitness Web App - app.py (PostgreSQL version)
+# AJ Fitness Web App - app.py (PostgreSQL version with Neon fix)
 
 from flask import Flask, render_template, request, redirect, url_for, session, send_file, flash
 import os, shutil, csv
@@ -18,11 +18,22 @@ os.makedirs(EXPORT_FOLDER, exist_ok=True)
 os.makedirs(BACKUP_FOLDER, exist_ok=True)
 
 # Database connection
-DATABASE_URL = os.environ.get("DATABASE_URL")  # Render/Neon/Supabase env variable
-
 def get_db_connection():
-    conn = psycopg2.connect(DATABASE_URL, sslmode="require")
+    url = os.environ.get("DATABASE_URL")
+    if not url:
+        raise Exception("DATABASE_URL is not set!")
+
+    # psycopg2 needs "postgresql://" not "postgres://"
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql://", 1)
+
+    # Remove query params like ?sslmode=require&channel_binding=require
+    if "?" in url:
+        url = url.split("?")[0]
+
+    conn = psycopg2.connect(url, sslmode="require")
     return conn
+
 
 @app.route('/', methods=['GET', 'POST'])
 def login():
@@ -33,6 +44,7 @@ def login():
         else:
             flash('Invalid credentials')
     return render_template('login.html')
+
 
 @app.route('/dashboard')
 def dashboard():
