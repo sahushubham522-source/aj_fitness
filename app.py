@@ -16,11 +16,9 @@ EXPORT_FOLDER = 'exports'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(EXPORT_FOLDER, exist_ok=True)
 os.makedirs(BACKUP_FOLDER, exist_ok=True)
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-# Database connection
-DATABASE_URL = os.environ.get("DATABASE_URL")
-
-# Fix for Neon "postgresql://" → psycopg2 expects "postgres://"
+# Normalize for psycopg2
 if DATABASE_URL and DATABASE_URL.startswith("postgresql://"):
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgres://", 1)
 
