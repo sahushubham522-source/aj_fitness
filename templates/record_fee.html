@@ -65,7 +65,10 @@
             <label for="date">Date of Payment:</label>
             <input type="date" name="date" value="{{ current_date }}" required>
 
-            <button type="submit">Submit Fee</button>
+            <label for="expiry_date">New Expiry Date:</label>
+            <input type="date" name="expiry_date" value="{{ member.expiry_date }}">
+
+            <button type="submit">Submit Fee & Update Expiry</button>
         </form>
         <div class="back-link">
             <a href="/dashboard">← Back to Dashboard</a>

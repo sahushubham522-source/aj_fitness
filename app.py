@@ -1,33 +1,28 @@
-# AJ Fitness Desktop App - app.py
+# AJ Fitness Web App - app.py (PostgreSQL version)
 
 from flask import Flask, render_template, request, redirect, url_for, session, send_file, flash
-import sqlite3, os, shutil, csv
+import os, shutil, csv
 from datetime import datetime, date, timedelta
 from werkzeug.utils import secure_filename
+import psycopg2
+import psycopg2.extras
 
 app = Flask(__name__)
 app.secret_key = 'ajfitnesssecret'
 UPLOAD_FOLDER = 'static/images'
-DB_PATH = 'database/aj_fitness.db'
 BACKUP_FOLDER = 'backups'
 EXPORT_FOLDER = 'exports'
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(EXPORT_FOLDER, exist_ok=True)
 os.makedirs(BACKUP_FOLDER, exist_ok=True)
-os.makedirs('database', exist_ok=True)
+
+# Database connection
+DATABASE_URL = os.environ.get("DATABASE_URL")  # Render/Neon/Supabase env variable
 
 def get_db_connection():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = psycopg2.connect(DATABASE_URL, sslmode="require")
     return conn
-
-def init_db():
-    conn = get_db_connection()
-    with open('init.sql', 'r') as f:
-        conn.executescript(f.read())
-    conn.commit()
-    conn.close()
 
 @app.route('/', methods=['GET', 'POST'])
 def login():
@@ -45,39 +40,51 @@ def dashboard():
         return redirect(url_for('login'))
 
     conn = get_db_connection()
-    search = request.args.get('search', '').strip()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
+    search = request.args.get('search', '').strip()
     if search:
-        members = conn.execute("SELECT * FROM members WHERE name LIKE ?", ('%' + search + '%',)).fetchall()
+        cur.execute("SELECT * FROM members WHERE name ILIKE %s", (f"%{search}%",))
     else:
-        members = conn.execute("SELECT * FROM members").fetchall()
+        cur.execute("SELECT * FROM members")
+    members = cur.fetchall()
 
     today = date.today()
     today_str = today.isoformat()
 
-    new_joins = conn.execute("SELECT COUNT(*) FROM members WHERE start_date = ?", (today_str,)).fetchone()[0]
-    new_payments = conn.execute("SELECT COUNT(*) FROM fees WHERE date = ?", (today_str,)).fetchone()[0]
-    expiring_soon = conn.execute("SELECT COUNT(*) FROM members WHERE end_date <= date('now', '+3 days') AND end_date >= date('now')").fetchone()[0]
+    cur.execute("SELECT COUNT(*) FROM members WHERE start_date = %s", (today_str,))
+    new_joins = cur.fetchone()["count"]
 
-    # New: Select members with expiry between -3 and +2 days
-    expiry_alerts = conn.execute("""
+    cur.execute("SELECT COUNT(*) FROM fees WHERE date = %s", (today_str,))
+    new_payments = cur.fetchone()["count"]
+
+    cur.execute("""
+        SELECT COUNT(*) FROM members 
+        WHERE end_date <= (CURRENT_DATE + INTERVAL '3 days') 
+          AND end_date >= CURRENT_DATE
+    """)
+    expiring_soon = cur.fetchone()["count"]
+
+    cur.execute("""
         SELECT * FROM members
-        WHERE end_date BETWEEN date('now', '-3 day') AND date('now', '+2 day')
+        WHERE end_date BETWEEN (CURRENT_DATE - INTERVAL '3 days') AND (CURRENT_DATE + INTERVAL '2 days')
         ORDER BY end_date
-    """).fetchall()
+    """)
+    expiry_alerts = cur.fetchall()
 
     updated_members = []
     for m in members:
-        m = dict(m)
-        m['expiring'] = (m['end_date'] <= (today + timedelta(days=3)).isoformat())
-        last_fee = conn.execute("SELECT date FROM fees WHERE member_id = ? ORDER BY date DESC LIMIT 1", (m['id'],)).fetchone()
+        m['expiring'] = (m['end_date'] <= (today + timedelta(days=3)))
+        cur.execute("SELECT date FROM fees WHERE member_id = %s ORDER BY date DESC LIMIT 1", (m['id'],))
+        last_fee = cur.fetchone()
         if last_fee:
-            last_fee_date = datetime.strptime(last_fee['date'], "%Y-%m-%d").date()
+            last_fee_date = last_fee["date"]
             m['overdue'] = (today - last_fee_date).days > 30
         else:
             m['overdue'] = True
         updated_members.append(m)
 
+    cur.close()
     conn.close()
     return render_template(
         'dashboard.html',
@@ -98,15 +105,14 @@ def delete_member(member_id):
     if not session.get('admin'):
         return redirect(url_for('login'))
     conn = get_db_connection()
-    # Delete fees first (foreign key constraint)
-    conn.execute("DELETE FROM fees WHERE member_id = ?", (member_id,))
-    # Delete member
-    conn.execute("DELETE FROM members WHERE id = ?", (member_id,))
+    cur = conn.cursor()
+    cur.execute("DELETE FROM fees WHERE member_id = %s", (member_id,))
+    cur.execute("DELETE FROM members WHERE id = %s", (member_id,))
     conn.commit()
+    cur.close()
     conn.close()
     flash('Member deleted successfully.')
     return redirect(url_for('dashboard'))
-
 
 @app.route('/add-member', methods=['GET', 'POST'])
 def add_member():
@@ -126,12 +132,16 @@ def add_member():
 
         conn = get_db_connection()
         cur = conn.cursor()
-        cur.execute("INSERT INTO members (name, phone, photo, start_date, end_date) VALUES (?, ?, ?, ?, ?)",
-                    (name, phone, filename, start_date, end_date))
-        member_id = cur.lastrowid
-        cur.execute("INSERT INTO fees (member_id, amount, date) VALUES (?, ?, ?)",
+        cur.execute("""
+            INSERT INTO members (name, phone, photo, start_date, end_date) 
+            VALUES (%s, %s, %s, %s, %s) RETURNING id
+        """, (name, phone, filename, start_date, end_date))
+        member_id = cur.fetchone()[0]
+
+        cur.execute("INSERT INTO fees (member_id, amount, date) VALUES (%s, %s, %s)",
                     (member_id, fee_amount, fee_date))
         conn.commit()
+        cur.close()
         conn.close()
         return redirect(url_for('dashboard'))
 
@@ -140,83 +150,97 @@ def add_member():
 @app.route('/record-fee/<int:member_id>', methods=['GET', 'POST'])
 def record_fee(member_id):
     conn = get_db_connection()
-    member = conn.execute("SELECT * FROM members WHERE id = ?", (member_id,)).fetchone()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("SELECT * FROM members WHERE id = %s", (member_id,))
+    member = cur.fetchone()
+
     if request.method == 'POST':
         amount = request.form['amount']
         date_paid = request.form['date']
-        conn.execute("INSERT INTO fees (member_id, amount, date) VALUES (?, ?, ?)", (member_id, amount, date_paid))
+        new_end_date = request.form.get('new_end_date')  # New field for expiry update
+
+        cur.execute("INSERT INTO fees (member_id, amount, date) VALUES (%s, %s, %s)",
+                    (member_id, amount, date_paid))
+
+        # If expiry update provided, update member end_date
+        if new_end_date:
+            cur.execute("UPDATE members SET end_date = %s WHERE id = %s", (new_end_date, member_id))
+
         conn.commit()
+        cur.close()
         conn.close()
         return redirect(url_for('dashboard'))
 
+    cur.close()
+    conn.close()
     return render_template('record_fee.html', member=member, current_date=date.today().isoformat())
 
 @app.route('/fee-history/<int:member_id>')
 def fee_history(member_id):
     conn = get_db_connection()
-    member = conn.execute("SELECT * FROM members WHERE id = ?", (member_id,)).fetchone()
-    history = conn.execute("SELECT * FROM fees WHERE member_id = ? ORDER BY date DESC", (member_id,)).fetchall()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("SELECT * FROM members WHERE id = %s", (member_id,))
+    member = cur.fetchone()
+    cur.execute("SELECT * FROM fees WHERE member_id = %s ORDER BY date DESC", (member_id,))
+    history = cur.fetchall()
+    cur.close()
     conn.close()
     return render_template('fee_history.html', member=member, history=history)
 
 @app.route('/print-receipt/<int:fee_id>')
 def print_receipt(fee_id):
     conn = get_db_connection()
-    fee = conn.execute("SELECT * FROM fees WHERE id = ?", (fee_id,)).fetchone()
-    member = conn.execute("SELECT * FROM members WHERE id = ?", (fee['member_id'],)).fetchone()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("SELECT * FROM fees WHERE id = %s", (fee_id,))
+    fee = cur.fetchone()
+    cur.execute("SELECT * FROM members WHERE id = %s", (fee['member_id'],))
+    member = cur.fetchone()
+    cur.close()
     conn.close()
     return render_template('print_receipt.html', fee=fee, member=member)
-
-@app.route('/backup')
-def backup():
-    if not session.get('admin'):
-        return redirect(url_for('login'))
-    now = datetime.now().strftime('%Y%m%d_%H%M%S')
-    backup_file = os.path.join(BACKUP_FOLDER, f"backup_{now}.db")
-    shutil.copy(DB_PATH, backup_file)
-    return send_file(backup_file, as_attachment=True)
 
 @app.route('/export/members')
 def export_members():
     conn = get_db_connection()
-    members = conn.execute('SELECT * FROM members').fetchall()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("SELECT * FROM members")
+    members = cur.fetchall()
 
     file_path = os.path.join(EXPORT_FOLDER, 'members.csv')
     with open(file_path, 'w', newline='') as csvfile:
         writer = csv.writer(csvfile)
-        # Add Total Fee column
         writer.writerow(['ID', 'Name', 'Phone', 'Start Date', 'End Date', 'Total Fee Paid'])
 
         for m in members:
-            # Get total fee for this member
-            total_fee = conn.execute(
-                "SELECT SUM(amount) as total FROM fees WHERE member_id = ?",
-                (m['id'],)
-            ).fetchone()['total']
+            cur.execute("SELECT SUM(amount) as total FROM fees WHERE member_id = %s", (m['id'],))
+            total_fee = cur.fetchone()["total"]
 
             writer.writerow([
                 m['id'], m['name'], m['phone'], m['start_date'], m['end_date'],
                 total_fee if total_fee else 0
             ])
 
+    cur.close()
     conn.close()
     return send_file(file_path, as_attachment=True)
-
 
 @app.route('/export/fees')
 def export_fees():
     conn = get_db_connection()
-    fees = conn.execute('SELECT * FROM fees').fetchall()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    cur.execute("SELECT * FROM fees")
+    fees = cur.fetchall()
+
     file_path = os.path.join(EXPORT_FOLDER, 'fees.csv')
     with open(file_path, 'w', newline='') as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(['ID', 'Member ID', 'Amount', 'Date'])
         for f in fees:
             writer.writerow([f['id'], f['member_id'], f['amount'], f['date']])
+
+    cur.close()
     conn.close()
     return send_file(file_path, as_attachment=True)
 
 if __name__ == '__main__':
-    if not os.path.exists(DB_PATH):
-        init_db()
     app.run(debug=True)
