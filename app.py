@@ -127,7 +127,9 @@ def add_member():
         fee_amount = request.form['fee_amount']
         fee_date = request.form['fee_date']
         photo = request.files['photo']
-
+        join_date = datetime.now().date()  # today
+        expiry_date = request.form['expiry_date']
+ 
         filename = None
         if photo:
             filename = secure_filename(photo.filename)
