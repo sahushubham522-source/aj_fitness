@@ -182,10 +182,10 @@ def record_fee(member_id):
         date_paid = request.form['date']
         cur.execute("INSERT INTO fees (member_id, amount, date) VALUES (%s, %s, %s)",
                     (member_id, amount, date_paid))
-	# Update/override member expiry date
-    	cur.execute("""
-        UPDATE members SET end_date = %s WHERE id = %s
-    	""", (new_end_date, member_id))
+      # Update/override member expiry date
+        cur.execute("""
+        UPDATE members SET end_date = %s WHERE id = %s  
+        """, (new_end_date, member_id))
         conn.commit()
         cur.close()
         conn.close()
