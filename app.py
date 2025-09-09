@@ -1,4 +1,4 @@
-# AJ Fitness Web App - app.py (PostgreSQL version with Neon fix)
+# AJ Fitness Web App - app.py (PostgreSQL with old schema consistency)
 
 from flask import Flask, render_template, request, redirect, url_for, session, send_file, flash
 import os, shutil, csv
@@ -16,6 +16,7 @@ EXPORT_FOLDER = 'exports'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(EXPORT_FOLDER, exist_ok=True)
 os.makedirs(BACKUP_FOLDER, exist_ok=True)
+
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 # Normalize for psycopg2
@@ -25,6 +26,8 @@ if DATABASE_URL and DATABASE_URL.startswith("postgresql://"):
 def get_db_connection():
     conn = psycopg2.connect(DATABASE_URL)
     return conn
+
+# ------------------- AUTH -------------------
 
 @app.route('/', methods=['GET', 'POST'])
 def login():
@@ -36,6 +39,12 @@ def login():
             flash('Invalid credentials')
     return render_template('login.html')
 
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
+
+# ------------------- DASHBOARD -------------------
 
 @app.route('/dashboard')
 def dashboard():
@@ -98,10 +107,7 @@ def dashboard():
         expiry_alerts=expiry_alerts
     )
 
-@app.route('/logout')
-def logout():
-    session.clear()
-    return redirect(url_for('login'))
+# ------------------- MEMBERS -------------------
 
 @app.route('/delete-member/<int:member_id>', methods=['POST'])
 def delete_member(member_id):
@@ -117,52 +123,38 @@ def delete_member(member_id):
     flash('Member deleted successfully.')
     return redirect(url_for('dashboard'))
 
-app.config['UPLOAD_FOLDER'] = 'static/uploads'
 @app.route('/add-member', methods=['GET', 'POST'])
 def add_member():
     if request.method == 'POST':
         try:
-            # Get form data
             name = request.form['name'].strip()
             phone = request.form['phone'].strip()
-            start_date_str = request.form['start_date']
-            end_date_str = request.form['end_date']
+            start_date = request.form['start_date']
+            end_date = request.form['end_date']
+            fee_amount = request.form['fee_amount']
+            fee_date = request.form['fee_date']
 
-            # Validate required fields
-            if not name or not phone or not start_date_str or not end_date_str:
+            if not name or not phone or not start_date or not end_date:
                 flash("Please fill all required fields", "error")
                 return redirect(url_for('add_member'))
 
-            # Convert dates to proper format
-            start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date()
-            end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date()
-            join_date = datetime.now().date()
-            expiry_date = end_date  # You can adjust if needed
-
-            # Handle photo upload
-            if 'photo' not in request.files:
-                flash("No photo uploaded", "error")
-                return redirect(url_for('add_member'))
-
             photo_file = request.files['photo']
-            if photo_file.filename == '':
-                flash("No selected photo", "error")
-                return redirect(url_for('add_member'))
+            filename = None
+            if photo_file and photo_file.filename != '':
+                filename = secure_filename(photo_file.filename)
+                photo_file.save(os.path.join(UPLOAD_FOLDER, filename))
 
-            filename = secure_filename(photo_file.filename)
-            photo_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-            photo_file.save(photo_path)
-
-            # Insert into database
             conn = get_db_connection()
             cur = conn.cursor()
-            cur.execute("""
-                INSERT INTO members 
-                (name, phone, start_date, end_date, join_date, expiry_date, photo)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-                RETURNING id
-            """, (name, phone, start_date, end_date, join_date, expiry_date, filename))
+            cur.execute(
+                "INSERT INTO members (name, phone, photo, start_date, end_date) VALUES (%s, %s, %s, %s, %s) RETURNING id",
+                (name, phone, filename, start_date, end_date)
+            )
+            member_id = cur.fetchone()[0]
+            cur.execute(
+                "INSERT INTO fees (member_id, amount, date) VALUES (%s, %s, %s)",
+                (member_id, fee_amount, fee_date)
+            )
             conn.commit()
             cur.close()
             conn.close()
@@ -174,7 +166,9 @@ def add_member():
             flash(f"Error adding member: {e}", "error")
             return redirect(url_for('add_member'))
 
-    return render_template('add_member.html')
+    return render_template('add_member.html', today=date.today().isoformat())
+
+# ------------------- FEES -------------------
 
 @app.route('/record-fee/<int:member_id>', methods=['GET', 'POST'])
 def record_fee(member_id):
@@ -186,15 +180,8 @@ def record_fee(member_id):
     if request.method == 'POST':
         amount = request.form['amount']
         date_paid = request.form['date']
-        new_end_date = request.form.get('new_end_date')  # New field for expiry update
-
         cur.execute("INSERT INTO fees (member_id, amount, date) VALUES (%s, %s, %s)",
                     (member_id, amount, date_paid))
-
-        # If expiry update provided, update member end_date
-        if new_end_date:
-            cur.execute("UPDATE members SET end_date = %s WHERE id = %s", (new_end_date, member_id))
-
         conn.commit()
         cur.close()
         conn.close()
@@ -227,6 +214,8 @@ def print_receipt(fee_id):
     cur.close()
     conn.close()
     return render_template('print_receipt.html', fee=fee, member=member)
+
+# ------------------- EXPORT -------------------
 
 @app.route('/export/members')
 def export_members():
@@ -270,6 +259,8 @@ def export_fees():
     cur.close()
     conn.close()
     return send_file(file_path, as_attachment=True)
+
+# ------------------- MAIN -------------------
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
