@@ -178,14 +178,44 @@ def record_fee(member_id):
     member = cur.fetchone()
 
     if request.method == 'POST':
-        amount = request.form['amount']
-        date_paid = request.form['date']
-        cur.execute("INSERT INTO fees (member_id, amount, date) VALUES (%s, %s, %s)",
-                    (member_id, amount, date_paid))
-      # Update/override member expiry date
-        cur.execute("""
-        UPDATE members SET end_date = %s WHERE id = %s  
-        """, (new_end_date, member_id))
+        # Get values from the form
+        fee_amount = request.form.get('fee_amount')
+        payment_date_str = request.form.get('date')
+        package_days = int(request.form.get('package_days', 30))  # default 30 days
+
+        # Convert payment date
+        try:
+            payment_date = datetime.strptime(payment_date_str, "%Y-%m-%d").date()
+        except Exception:
+            payment_date = date.today()
+
+        # Get current expiry date from DB
+        current_end_date = None
+        if member and member.get("end_date"):
+            try:
+                current_end_date = datetime.strptime(str(member["end_date"]), "%Y-%m-%d").date()
+            except:
+                current_end_date = None
+
+        # If no current expiry, or if expired, start from payment date
+        if not current_end_date or current_end_date < payment_date:
+            current_end_date = payment_date
+
+        # Calculate new expiry
+        new_end_date = current_end_date + timedelta(days=package_days)
+
+        # Insert into fees table
+        cur.execute(
+            "INSERT INTO fees (member_id, amount, date) VALUES (%s, %s, %s)",
+            (member_id, fee_amount, payment_date)
+        )
+
+        # Update member expiry date
+        cur.execute(
+            "UPDATE members SET end_date = %s WHERE id = %s",
+            (new_end_date, member_id)
+        )
+
         conn.commit()
         cur.close()
         conn.close()
